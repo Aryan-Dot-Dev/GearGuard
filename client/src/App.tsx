@@ -48,6 +48,7 @@ type MaintenanceRequest = {
 type KanbanBuckets = Record<RequestState, MaintenanceRequest[]>;
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:5000/api";
+const friendlyError = "Whoops! Something went wonky. Try again.";
 
 async function api<T>(path: string, options: RequestInit = {}, userId: string) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -65,22 +66,18 @@ async function api<T>(path: string, options: RequestInit = {}, userId: string) {
   return res.json() as Promise<T>;
 }
 
-function Badge({ label, tone }: { label: string; tone?: "green" | "amber" | "blue" | "red" }) {
-  const colors: Record<string, string> = {
-    green: "bg-emerald-100 text-emerald-800",
-    amber: "bg-amber-100 text-amber-800",
-    blue: "bg-sky-100 text-sky-800",
-    red: "bg-rose-100 text-rose-800"
-  };
-  return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${colors[tone ?? "blue"]}`}>{label}</span>;
+function Badge({ label, tone = "blue" }: { label: string; tone?: "green" | "amber" | "blue" | "red" | "pink" }) {
+  return <span className={`pill pill-${tone}`}>{label}</span>;
 }
 
 function Card({ title, children, actions }: { title: string; children: ReactNode; actions?: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/70 p-5 shadow-lg shadow-slate-900/5 backdrop-blur">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        {actions}
+    <section className="panel">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">{title}</p>
+        </div>
+        {actions && <div className="panel-actions">{actions}</div>}
       </div>
       {children}
     </section>
@@ -106,12 +103,32 @@ function App() {
     scheduledDate: ""
   });
 
+  const typeLabels: Record<RequestType, string> = {
+    corrective: "Quick fix",
+    preventive: "Tune-up"
+  };
+
+  const stateLabels: Record<RequestState, string> = {
+    new: "Fresh",
+    in_progress: "Fixing",
+    repaired: "All good",
+    scrap: "Retired"
+  };
+
+  const roleLabels: Record<TeamRole, string> = {
+    manager: "Crew lead",
+    technician: "Helper"
+  };
+
   const members: TeamMember[] = useMemo(
     () => teams.flatMap((t) => t.members ?? []),
     [teams]
   );
 
-  const currentUser = members.find((m) => m.userId === userId) ?? members.find((m) => m.role === "manager");
+  const handleUiError = (err: unknown) => {
+    console.error(err);
+    setError(friendlyError);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -127,7 +144,7 @@ function App() {
         setKanban(kanbanRes);
         setError(null);
       } catch (err) {
-        setError((err as Error).message);
+        handleUiError(err);
       } finally {
         setLoading(false);
       }
@@ -137,7 +154,7 @@ function App() {
 
   const handleCreateRequest = async () => {
     if (!form.subject || !form.equipmentId) {
-      setError("Subject and equipment are required");
+      setError("Please add a title and pick gear.");
       return;
     }
     try {
@@ -161,7 +178,7 @@ function App() {
       setEquipment(equipmentRes);
       setKanban(kanbanRes);
     } catch (err) {
-      setError((err as Error).message);
+      handleUiError(err);
     }
   };
 
@@ -208,12 +225,11 @@ function App() {
         method: "PATCH",
         body: JSON.stringify({ state: nextState })
       }, userId);
-      // Sync selection
       setSelectedRequest((prev) => (prev && prev.id === id ? { ...prev, ...updated } : prev));
       await refreshKanban();
     } catch (err) {
       await refreshKanban();
-      setError((err as Error).message);
+      handleUiError(err);
     } finally {
       setDraggingId(null);
     }
@@ -232,7 +248,7 @@ function App() {
       setSelectedRequest(detail);
       setAssignTechnicianId(detail.technicianId ?? "");
     } catch (err) {
-      setError((err as Error).message);
+      handleUiError(err);
     } finally {
       setDetailLoading(false);
     }
@@ -255,7 +271,7 @@ function App() {
       setSelectedRequest(updated);
       await refreshKanban();
     } catch (err) {
-      setError((err as Error).message);
+      handleUiError(err);
     } finally {
       setDetailLoading(false);
     }
@@ -268,278 +284,261 @@ function App() {
     scrap: []
   };
 
-  const requestColumns: { key: RequestState; label: string; tone: "blue" | "amber" | "green" | "red" }[] = [
-    { key: "new", label: "New", tone: "blue" },
-    { key: "in_progress", label: "In Progress", tone: "amber" },
-    { key: "repaired", label: "Repaired", tone: "green" },
-    { key: "scrap", label: "Scrap", tone: "red" }
+  const requestColumns: { key: RequestState; label: string; tone: "blue" | "amber" | "green" | "red" | "pink" }[] = [
+    { key: "new", label: stateLabels.new, tone: "pink" },
+    { key: "in_progress", label: stateLabels.in_progress, tone: "amber" },
+    { key: "repaired", label: stateLabels.repaired, tone: "green" },
+    { key: "scrap", label: stateLabels.scrap, tone: "red" }
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-50">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10">
-        <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg shadow-slate-900/10">
-          <div>
-            <p className="text-sm text-slate-300">GearGuard Maintenance</p>
-            <h1 className="text-2xl font-semibold text-white">Operations Console</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="text-sm text-slate-300">
-              User is required in header <span className="font-semibold">x-user-id</span>
-            </div>
+    <div className="app-shell">
+      <div className="paper-noise" aria-hidden="true" />
+      <header className="hero-block">
+        <div>
+          <h1 className="hero-title">Control Board</h1>
+        </div>
+        <div className="user-picker">
+          <div className="picker-row">
             <select
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              className="rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-900 shadow"
+              className="picker-select"
             >
               {members.map((m) => (
                 <option key={m.id} value={m.userId}>
-                  {m.name} — {m.role}
+                  {m.name} — {roleLabels[m.role]}
                 </option>
               ))}
-              {!members.length && <option value="alex.mechanic">alex.mechanic (seed)</option>}
+              {!members.length && <option value="alex.mechanic">Alex (seeded)</option>}
             </select>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {error && (
-          <div className="rounded-xl border border-rose-300/40 bg-rose-100/70 px-4 py-3 text-rose-800 shadow">
-            {error}
-          </div>
-        )}
+      {error && <div className="loud-alert">{error}</div>}
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <Card
-              title="Maintenance Requests"
-              actions={<span className="text-sm text-slate-500">{loading ? "Loading..." : "Live"}</span>}
-            >
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {requestColumns.map((col) => (
-                  <div
-                    key={col.key}
-                    className={`rounded-xl border border-white/10 bg-white/60 p-3 shadow-sm ${draggingId ? "ring-1 ring-sky-300/60" : ""}`}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => handleDrop(col.key)}
-                  >
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="font-semibold text-slate-900">{col.label}</span>
-                      <Badge label={`${kanban?.[col.key]?.length ?? 0}`} tone={col.tone} />
-                    </div>
-                    <div className="space-y-2">
-                      {(kanban?.[col.key] ?? []).map((req) => (
-                        <div
-                          key={req.id}
-                          draggable
-                          onDragStart={() => setDraggingId(req.id)}
-                          onDragEnd={() => setDraggingId(null)}
-                          onClick={() => openDetails(req.id)}
-                          className="cursor-grab rounded-lg border border-white/10 bg-white/80 p-3 text-sm shadow transition hover:-translate-y-0.5 hover:shadow-md"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-900">{req.subject}</span>
-                            {req.overdue && <Badge label="Overdue" tone="red" />}
-                          </div>
-                          <p className="text-slate-600">{req.type === "corrective" ? "Corrective" : "Preventive"}</p>
-                          {req.equipment && (
-                            <p className="text-xs text-slate-500">Equipment: {req.equipment.name}</p>
-                          )}
-                          {req.dueDate && (
-                            <p className="text-xs text-slate-500">Due: {new Date(req.dueDate).toLocaleDateString()}</p>
-                          )}
+      <div className="content-grid">
+        <div className="board-stack">
+          <Card
+            title="Fix cards"
+            actions={<span className="live-pill">{loading ? "Loading..." : "Live board"}</span>}
+          >
+            <div className="kanban-grid">
+              {requestColumns.map((col) => (
+                <div
+                  key={col.key}
+                  className={`kanban-col kanban-${col.tone} ${draggingId ? "kanban-active" : ""}`}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleDrop(col.key)}
+                >
+                  <div className="kanban-head">
+                    <span className="kanban-label">{col.label}</span>
+                    <Badge label={`${kanban?.[col.key]?.length ?? 0}`} tone={col.tone} />
+                  </div>
+                  <div className="card-stack">
+                    {(kanban?.[col.key] ?? []).map((req) => (
+                      <article
+                        key={req.id}
+                        draggable
+                        onDragStart={() => setDraggingId(req.id)}
+                        onDragEnd={() => setDraggingId(null)}
+                        onClick={() => openDetails(req.id)}
+                        className="request-card"
+                      >
+                        <div className="card-top">
+                          <span className="card-title">{req.subject}</span>
+                          {req.overdue && <Badge label="Late" tone="red" />}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            <Card title="Equipment">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {equipment.map((eq) => (
-                  <div key={eq.id} className="rounded-xl border border-white/10 bg-white/70 p-4 shadow">
-                    <div className="mb-1 flex items-center justify-between">
-                      <h3 className="font-semibold text-slate-900">{eq.name}</h3>
-                      <Badge
-                        label={eq.status === "scrapped" ? "Scrapped" : "Active"}
-                        tone={eq.status === "scrapped" ? "red" : "green"}
-                      />
-                    </div>
-                    <p className="text-sm text-slate-600">Serial: {eq.serialNumber}</p>
-                    <p className="text-sm text-slate-600">Location: {eq.location}</p>
-                  </div>
-                ))}
-                {!equipment.length && <p className="text-sm text-slate-500">No equipment found</p>}
-              </div>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card title="Create Maintenance Request">
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-1 block text-sm text-slate-700">Subject</label>
-                  <input
-                    value={form.subject}
-                    onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"
-                    placeholder="e.g. Hydraulic leak"
-                  />
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-slate-700">Type</label>
-                  <select
-                    value={form.type}
-                    onChange={(e) => setForm({ ...form, type: e.target.value as RequestType })}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                  >
-                    <option value="corrective">Corrective</option>
-                    <option value="preventive">Preventive</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm text-slate-700">Equipment</label>
-                  <select
-                    value={form.equipmentId}
-                    onChange={(e) => setForm({ ...form, equipmentId: e.target.value })}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                  >
-                    <option value="">Select equipment</option>
-                    {equipment.map((eq) => (
-                      <option key={eq.id} value={eq.id}>
-                        {eq.name} — {eq.location}
-                      </option>
+                        <p className="card-line">{typeLabels[req.type]}</p>
+                        {req.equipment && <p className="card-line subtle">Gear: {req.equipment.name}</p>}
+                        {req.dueDate && (
+                          <p className="card-line subtle">Finish by: {new Date(req.dueDate).toLocaleDateString()}</p>
+                        )}
+                      </article>
                     ))}
-                  </select>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-sm text-slate-700">Due date</label>
-                    <input
-                      type="date"
-                      value={form.dueDate}
-                      onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+              ))}
+            </div>
+          </Card>
+
+          <Card title="Gear shelf">
+            <p className="panel-sub">Bright list of stuff in play.</p>
+            <div className="gear-grid">
+              {equipment.map((eq) => (
+                <div key={eq.id} className="gear-card">
+                  <div className="gear-row">
+                    <h3 className="gear-name">{eq.name}</h3>
+                    <Badge
+                      label={eq.status === "scrapped" ? "Retired" : "Ready"}
+                      tone={eq.status === "scrapped" ? "red" : "green"}
                     />
                   </div>
-                  {form.type === "preventive" && (
-                    <div>
-                      <label className="mb-1 block text-sm text-slate-700">Scheduled date</label>
-                      <input
-                        type="date"
-                        value={form.scheduledDate}
-                        onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                      />
-                    </div>
-                  )}
+                  <p className="gear-line">Tag: {eq.serialNumber}</p>
+                  <p className="gear-line">Spot: {eq.location}</p>
                 </div>
-                <button
-                  onClick={handleCreateRequest}
-                  className="w-full rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-600/30 transition hover:bg-sky-700"
-                >
-                  Create Request
-                </button>
-                <p className="text-xs text-slate-500">Requests auto-route to the equipment’s maintenance team.</p>
-              </div>
-            </Card>
-
-            <Card title="Teams & Technicians">
-              <div className="space-y-3">
-                {teams.map((team) => (
-                  <div key={team.id} className="rounded-lg border border-white/10 bg-white/70 p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="font-semibold text-slate-900">{team.name}</span>
-                      <Badge label={`${team.members?.length ?? 0} techs`} tone="blue" />
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(team.members ?? []).map((m) => (
-                        <span
-                          key={m.id}
-                          className="rounded-full bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white"
-                        >
-                          {m.name} · {m.role}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                {!teams.length && <p className="text-sm text-slate-500">No teams found</p>}
-              </div>
-            </Card>
-          </div>
+              ))}
+              {!equipment.length && <p className="panel-sub">No gear yet.</p>}
+            </div>
+          </Card>
         </div>
-        {selectedRequest && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 md:items-center">
-            <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-white p-6 shadow-2xl">
-              <div className="mb-3 flex items-start justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Request</p>
-                  <h3 className="text-xl font-semibold text-slate-900">{selectedRequest.subject}</h3>
-                  <div className="mt-2 flex gap-2">
-                    <Badge label={selectedRequest.type === "corrective" ? "Corrective" : "Preventive"} tone="blue" />
-                    <Badge label={selectedRequest.state.replace("_", " ")} tone="amber" />
-                    {selectedRequest.overdue && <Badge label="Overdue" tone="red" />}
-                  </div>
-                </div>
-                <button onClick={closeDetails} className="text-slate-500 hover:text-slate-700">✕</button>
-              </div>
 
-              <div className="space-y-2 text-sm text-slate-700">
-                {selectedRequest.description && <p className="text-slate-600">{selectedRequest.description}</p>}
-                <p>Equipment: <span className="font-semibold">{selectedRequest.equipment?.name ?? selectedRequest.equipmentId}</span></p>
-                {selectedRequest.dueDate && <p>Due: {new Date(selectedRequest.dueDate).toLocaleString()}</p>}
-                {selectedRequest.scheduledDate && <p>Scheduled: {new Date(selectedRequest.scheduledDate).toLocaleString()}</p>}
-                {selectedRequest.technician && <p>Technician: {selectedRequest.technician.name}</p>}
-              </div>
+        <div className="side-stack">
+          <Card title="Add a fix card">
+            <div className="form-grid">
+              <label className="input-label">What's up?</label>
+              <input
+                value={form.subject}
+                onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                className="input-field"
+                placeholder="e.g. Drip under the pump"
+              />
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {allowedTransitions[selectedRequest.state].map((next) => (
-                  <button
-                    key={next}
-                    onClick={() => void moveRequest(selectedRequest.id, next)}
-                    className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-sky-700"
-                    disabled={detailLoading}
-                  >
-                    Move to {next.replace("_", " ")}
-                  </button>
+              <label className="input-label">Kind of job</label>
+              <select
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value as RequestType })}
+                className="input-field"
+              >
+                <option value="corrective">Quick fix</option>
+                <option value="preventive">Tune-up</option>
+              </select>
+
+              <label className="input-label">Pick gear</label>
+              <select
+                value={form.equipmentId}
+                onChange={(e) => setForm({ ...form, equipmentId: e.target.value })}
+                className="input-field"
+              >
+                <option value="">Select a piece</option>
+                {equipment.map((eq) => (
+                  <option key={eq.id} value={eq.id}>
+                    {eq.name} — {eq.location}
+                  </option>
                 ))}
-                {!allowedTransitions[selectedRequest.state].length && (
-                  <span className="text-xs text-slate-500">No further transitions.</span>
+              </select>
+
+              <div className="form-row">
+                <div className="form-half">
+                  <label className="input-label">Finish by</label>
+                  <input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                    className="input-field"
+                  />
+                </div>
+                {form.type === "preventive" && (
+                  <div className="form-half">
+                    <label className="input-label">Plan date</label>
+                    <input
+                      type="date"
+                      value={form.scheduledDate}
+                      onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
                 )}
               </div>
 
-              <div className="mt-4 space-y-2">
-                <p className="text-sm font-semibold text-slate-800">Reassign technician</p>
-                <div className="flex gap-2">
-                  <select
-                    value={assignTechnicianId}
-                    onChange={(e) => setAssignTechnicianId(e.target.value)}
-                    className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                  >
-                    <option value="">Select technician</option>
-                    {members
-                      .filter((m) => m.teamId === selectedRequest.teamId)
-                      .map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} — {m.role}
-                        </option>
-                      ))}
-                  </select>
-                  <button
-                    onClick={() => void assignTechnician()}
-                    disabled={!assignTechnicianId || detailLoading}
-                    className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                  >
-                    Save
-                  </button>
+              <button onClick={handleCreateRequest} className="primary-btn">
+                Drop it on the board
+              </button>
+              <p className="panel-sub">We nudge the right crew automatically.</p>
+            </div>
+          </Card>
+
+          <Card title="Crews & helpers">
+            <div className="crew-list">
+              {teams.map((team) => (
+                <div key={team.id} className="crew-card">
+                  <div className="crew-row">
+                    <span className="crew-name">{team.name}</span>
+                    <Badge label={`${team.members?.length ?? 0} on deck`} tone="blue" />
+                  </div>
+                  <div className="crew-members">
+                    {(team.members ?? []).map((m) => (
+                      <span key={m.id} className="mini-chip dark">
+                        {m.name} · {roleLabels[m.role]}
+                      </span>
+                    ))}
+                  </div>
                 </div>
+              ))}
+              {!teams.length && <p className="panel-sub">No crews yet.</p>}
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {selectedRequest && (
+        <div className="modal-shell" role="dialog" aria-modal="true">
+          <div className="modal-card">
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Card</p>
+                <h3 className="modal-title">{selectedRequest.subject}</h3>
+                <div className="chip-row">
+                  <Badge label={typeLabels[selectedRequest.type]} tone="blue" />
+                  <Badge label={stateLabels[selectedRequest.state]} tone="amber" />
+                  {selectedRequest.overdue && <Badge label="Late" tone="red" />}
+                </div>
+              </div>
+              <button onClick={closeDetails} className="close-btn" aria-label="Close">✕</button>
+            </div>
+
+            <div className="modal-body">
+              {selectedRequest.description && <p className="card-line">{selectedRequest.description}</p>}
+              <p className="card-line">Gear: {selectedRequest.equipment?.name ?? selectedRequest.equipmentId}</p>
+              {selectedRequest.dueDate && <p className="card-line">Finish by: {new Date(selectedRequest.dueDate).toLocaleString()}</p>}
+              {selectedRequest.scheduledDate && <p className="card-line">Plan date: {new Date(selectedRequest.scheduledDate).toLocaleString()}</p>}
+              {selectedRequest.technician && <p className="card-line">Helper: {selectedRequest.technician.name}</p>}
+            </div>
+
+            <div className="chip-row">
+              {allowedTransitions[selectedRequest.state].map((next) => (
+                <button
+                  key={next}
+                  onClick={() => void moveRequest(selectedRequest.id, next)}
+                  className="primary-btn ghost"
+                  disabled={detailLoading}
+                >
+                  Send to {stateLabels[next]}
+                </button>
+              ))}
+              {!allowedTransitions[selectedRequest.state].length && <span className="panel-sub">All done.</span>}
+            </div>
+
+            <div className="reassign">
+              <p className="input-label">Swap helper</p>
+              <div className="reassign-row">
+                <select
+                  value={assignTechnicianId}
+                  onChange={(e) => setAssignTechnicianId(e.target.value)}
+                  className="input-field"
+                >
+                  <option value="">Pick a helper</option>
+                  {members
+                    .filter((m) => m.teamId === selectedRequest.teamId)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} — {roleLabels[m.role]}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={() => void assignTechnician()}
+                  disabled={!assignTechnicianId || detailLoading}
+                  className="primary-btn"
+                >
+                  Save
+                </button>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
