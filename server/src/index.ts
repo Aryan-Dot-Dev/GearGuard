@@ -1,19 +1,20 @@
-import express from 'express';
-import dotenv from 'dotenv';
-import { sequelize } from './config/db';
+import "reflect-metadata";
+import { app } from "./app.ts";
+import { sequelize } from "./config/db.ts";
 
-dotenv.config();
-
-const app = express();
 const PORT = process.env.PORT || 5000;
 
-await sequelize.sync({alter: true});
-app.use(express.json());
+const start = async () => {
+  try {
+    await sequelize.authenticate();
+    await sequelize.sync({ alter: true });
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server", error);
+    process.exit(1);
+  }
+};
 
-app.get('/', (req, res) => {
-  res.send('Hello, GearGuard!');
-});
-
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+void start();
