@@ -20,7 +20,7 @@
 
 body {
   margin: 0;
-  background: linear-gradient(145deg, #f9f6ef 0%, #f3eee6 100%);
+  background: #f4efe6;
 }
 
 .app-shell {
@@ -29,6 +29,7 @@ body {
   padding: 28px 20px 40px;
   color: var(--ink);
   overflow: hidden;
+  background: radial-gradient(circle at 15% 20%, #fffaf3 0%, #f4efe6 45%, #efe6db 100%);
 }
 
 .paper-noise {
@@ -155,6 +156,11 @@ body {
   grid-template-columns: 2fr 1fr;
   gap: 18px;
   margin-top: 18px;
+  background: #fff9f3;
+  border: 2px solid #d6c7af;
+  border-radius: 20px;
+  box-shadow: 6px 6px 0 var(--shadow);
+  padding: 14px;
 }
 
 @media (max-width: 1024px) {
@@ -173,8 +179,8 @@ body {
 .panel {
   background: #ffffff;
   border: 2px solid var(--ink);
-  border-radius: 18px;
-  box-shadow: 5px 5px 0 var(--shadow);
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 var(--shadow);
   padding: 16px 18px;
   position: relative;
 }
@@ -380,7 +386,7 @@ body {
 
 .input-field {
   width: 100%;
-  background: #fff;
+  background: #fffaf3;
   border: 2px solid var(--ink);
   border-radius: 16px;
   padding: 12px 14px;
