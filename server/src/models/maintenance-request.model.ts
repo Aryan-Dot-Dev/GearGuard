@@ -1,27 +1,73 @@
-import { BelongsTo, Column, DataType, ForeignKey, Table } from "../../node_modules/sequelize-typescript/dist/index";
-import { RequestType } from "../common/enums";
-import { Equipment } from "./equipment.model";
+import {
+  BelongsTo,
+  Column,
+  DataType,
+  Default,
+  ForeignKey,
+  IsUUID,
+  Model,
+  PrimaryKey,
+  Table
+} from "sequelize-typescript";
+import { RequestState, RequestType } from "../common/enums.ts";
+import { Equipment } from "./equipment.model.ts";
+import { MaintenanceTeam } from "./maintenance-team.model.ts";
+import { TeamMember } from "./team-member.model.ts";
 
-@Table
-export class MaintenanceRequest extends Model {
-  @Column subject!: string;
+@Table({ tableName: "maintenance_requests", timestamps: true })
+export class MaintenanceRequest extends Model<MaintenanceRequest> {
+  @PrimaryKey
+  @IsUUID(4)
+  @Default(DataType.UUIDV4)
+  @Column(DataType.UUID)
+  declare id: string;
 
-  @Column(DataType.ENUM(...Object.values(RequestType)))
-  type!: RequestType;
+  @Column({ allowNull: false, type: DataType.STRING })
+  declare subject: string;
 
-  @Column(DataType.ENUM(...Object.values(RequestState)))
-  state!: RequestState;
+  @Column({ allowNull: true, type: DataType.TEXT })
+  declare description?: string;
+
+  @Column({
+    allowNull: false,
+    type: DataType.ENUM(...Object.values(RequestType) as string[])
+  })
+  declare type: RequestType;
+
+  @Column({
+    allowNull: false,
+    type: DataType.ENUM(...Object.values(RequestState) as string[]),
+    defaultValue: RequestState.New
+  })
+  declare state: RequestState;
 
   @ForeignKey(() => Equipment)
-  @Column equipmentId!: string;
+  @Column({ allowNull: false, type: DataType.UUID })
+  declare equipmentId: string;
 
-  @Column teamId!: string;
-  @Column technicianId!: string;
+  @ForeignKey(() => MaintenanceTeam)
+  @Column({ allowNull: false, type: DataType.UUID })
+  declare teamId: string;
 
-  @Column scheduledDate?: Date;
-  @Column durationHours?: number;
-  @Column dueDate?: Date;
+  @ForeignKey(() => TeamMember)
+  @Column({ allowNull: false, type: DataType.UUID })
+  declare technicianId: string;
+
+  @Column({ allowNull: true, type: DataType.DATE })
+  declare scheduledDate?: Date;
+
+  @Column({ allowNull: true, type: DataType.FLOAT })
+  declare durationHours?: number;
+
+  @Column({ allowNull: true, type: DataType.DATE })
+  declare dueDate?: Date;
 
   @BelongsTo(() => Equipment)
   equipment!: Equipment;
+
+  @BelongsTo(() => MaintenanceTeam)
+  team!: MaintenanceTeam;
+
+  @BelongsTo(() => TeamMember, { foreignKey: "technicianId", as: "technician" })
+  technician!: TeamMember;
 }
